@@ -1,0 +1,39 @@
+名称：构建审核映像
+
+在：
+  workflow_dispatch：
+  推：
+    分支：["主分支"]
+
+环境：
+  注册机构：ghcr.io
+  #闀滃儚钖戒О鏀逛负审计核心
+  IMAGE_NAME: ${{ github.repository_owner }}/audit-core
+
+工作机会：
+  建造：
+    运行平台：ubuntu-latest
+    权限：
+      内容：阅读
+      软件包：写入
+    步骤：
+      - 使用：actions/checkout@v4
+      - 使用：docker/login-action@v3
+        和：
+          注册表：${{ env.REGISTRY }}
+          用户名：${{ github.actor }}
+          密码：${{ secrets.GITHUB_TOKEN }}
+      
+      - 名称：提取元数据
+        id：元
+        使用：docker/metadata-action@v5
+        和：
+          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+
+      - 名称：构建和推送
+        使用：docker/build-push-action@v5
+        和：
+          语境： 。
+          推送：真
+          标签：${{ steps.meta.outputs.tags }}
+          标签：${{ steps.meta.outputs.labels }}
