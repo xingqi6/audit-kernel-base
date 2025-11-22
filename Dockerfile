@@ -3,34 +3,35 @@
 # ==========================================
 FROM surveyking/surveyking:latest AS source
 
-# 切换到 root 权限，确保能搜索所有角落
+# 切换到 root，确保有权限全盘搜索
 USER root
 
 # 核心逻辑：
-# 1. find / : 全盘搜索
-# 2. -name "*.jar" : 找 jar 包
-# 3. -size +30M : 关键！只找大于 30MB 的文件 (排除掉小的依赖包)
-# 4. -exec cp ... : 找到后直接复制并重命名为 /final.jar
-# 5. || true : 防止某些目录没有权限报错导致构建停止
-RUN find / -type f -name "*.jar" -size +30M -exec cp {} /final.jar \; || true
-
-# 调试：打印一下我们找到了什么 (在 GitHub Actions 日志里能看到)
-RUN ls -lh /final.jar
+# 1. 官方镜像里一定有 JAR 包。
+# 2. 我们不猜它叫什么名字（survey.jar? app.jar?），也不猜它在哪。
+# 3. 我们只找【大于 30MB】且是【.jar】结尾的文件。
+# 4. 找到后，直接复制并重命名为 /core.jar
+RUN echo "Searching for SurveyKing JAR..." && \
+    TARGET=$(find / -type f -name "*.jar" -size +30M | head -n 1) && \
+    if [ -z "$TARGET" ]; then echo "❌ FATAL: No JAR found!"; exit 1; fi && \
+    echo "✅ Found JAR at: $TARGET" && \
+    cp "$TARGET" /core.jar
 
 # ==========================================
-# 阶段 2：伪装模式 (构建纯净运行环境)
+# 阶段 2：隐匿模式 (构建纯净运行环境)
 # ==========================================
-# SurveyKing 推荐使用 Java 8
+# SurveyKing 依赖 Java 8 环境
 FROM eclipse-temurin:8-jre-alpine
 
+# 定义伪装后的进程名 (看起来像系统审计进程)
 ENV APP_NAME=audit_core_module
 WORKDIR /opt
 
-# 从第一阶段把那个大于 30MB 的文件复制过来
-COPY --from=source /final.jar /opt/${APP_NAME}.jar
+# 从第一阶段把提取到的文件复制过来
+COPY --from=source /core.jar /opt/${APP_NAME}.jar
 
 # 赋权
 RUN chmod +x /opt/${APP_NAME}.jar
 
-# 启动
+# 启动入口 (HF 启动时会覆盖此命令，但保留作为默认)
 ENTRYPOINT ["java", "-jar", "audit_core_module.jar"]
